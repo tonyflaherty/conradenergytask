@@ -1,0 +1,157 @@
+﻿@page "/electricitydemand"
+@using Blazored.LocalStorage
+@using ConradEnergy.Core.DTOs
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Net.Http.Headers
+@inject ILocalStorageService LocalStorage
+@inject HttpClient Http
+
+<PageTitle>Electricity Demand</PageTitle>
+
+<h3>Electricity Demand</h3>
+
+<AuthorizeView Context="authContext">
+    <Authorized>        
+<EditForm Model="@filter" class="row row-cols-lg-auto g-3 align-items-center" OnValidSubmit="HandleFilter">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+    <br />
+    
+    <div class="col">
+        <label for="autoSizingInput">Date From</label>
+        <input type="text" class="form-control" id="autoSizingInput" placeholder="Date From" @bind="@filter.DateFrom" @bind:format="dd/MM/yyyy">
+    </div>
+    <div class="col">
+        <label for="autoSizingInput">Date To</label>
+        <input type="text" class="form-control" id="autoSizingInput" placeholder="Date To" @bind="@filter.DateTo" @bind:format="dd/MM/yyyy">
+    </div>
+    <div class="col">
+        <label for="autoSizingInput">Page Size</label>
+        <input type="text" class="form-control" id="autoSizingInput" placeholder="Page Limit" @bind="@filter.PageSize">
+    </div>
+
+    <div class="col" style="padding-top: 20px">
+        <button type="submit" class="btn btn-primary align-bottom">
+            @if (isLoading)
+            {
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                <text>Loading...</text>
+            }
+            else
+            {
+                <text>Filter</text>
+            }
+        </button>
+
+    </div>
+</EditForm>
+</Authorized>
+<NotAuthorized>
+    <h5>You need to login to view the data</h5>
+</NotAuthorized>
+</AuthorizeView>
+
+@if (data is not null)
+{
+    <div style="margin-top: 20px">
+    @if (isPaging)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    <div class="nav-item px-3">
+        <table class="table table-sm table-striped">
+            <thead>
+                <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">Period</th>
+                    <th scope="col">Forecast/Actual</th>
+                    <th scope="col">Solar Capacity</th>
+                    <th scope="col">Solar Generation</th>
+                    <th scope="col">Wind Capacity</th>
+                    <th scope="col">Wind Generation</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in data.Results)
+                {
+                    <tr>
+                        <td>@item.SettlementDate.ToString("dd/MM/yyyy")</td>
+                        <td>@item.SettlementPeriod</td>
+                        <td>@(
+                                          item.ForecastActualIndicator.Equals("F") ? "Forecast" : "Actual"
+                                          )</td>
+                        <td>@item.EmbeddedSolarCapacity</td>
+                        <td>@item.EmbeddedSolarGeneration</td>
+                        <td>@item.EmbeddedWindCapacity</td>
+                        <td>@item.EmbeddedWindGeneration</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <hr />
+        <nav aria-label="Page navigation example">
+            <ul class="pagination justify-content-center">
+                <li class="page-item @(data.CurrentPage == 1 ? "disabled" : "")">
+                    <button type="button" class="btn btn-link page-link" @onclick="PreviousPage">Previous</button>
+                </li>
+                @for (var page = 1; page <= data.TotalPages; page++) {
+                    var pageNumber = page;
+                    <li class="page-item @(page == data.CurrentPage ? "active":"")">
+                        <button type="button" class="btn btn-link page-link" @onclick="() => ChangePage(pageNumber)">@(pageNumber)</button>
+                        </li>
+                }
+                <li class="page-item @(data.CurrentPage == data.TotalPages ? "disabled" : "")"> 
+                    <button type="button" class="btn btn-link page-link" @onclick="NextPage">Next</button>
+                </li>
+            </ul>
+        </nav>
+    </div>
+    </div>
+}
+
+@code {
+    private FilterModel filter = new FilterModel();
+    private bool isLoading = false;
+    private bool isPaging = false;
+    private DataResultModel<ElectricityDemandDto[]>? data;
+
+    private async Task HandleFilter() {        
+        isLoading = true;
+        filter.CurrentPage = 1;
+        await GetData();
+        isLoading = false;
+    }
+
+    private async Task GetData(){
+        var url = $"electricitydemand/{filter.RequestQuery}";
+        var token = await LocalStorage.GetItemAsync<TokenModel>("token");
+        Console.WriteLine(token);
+        Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
+        data = await Http.GetFromJsonAsync<DataResultModel<ElectricityDemandDto[]>>(url);
+    }
+
+    private async Task PreviousPage(){
+        var page = filter.CurrentPage - 1;
+        if (page < 1) page = 1;
+        await ChangePage(page);
+    }
+
+    private async Task NextPage(){
+        var page = filter.CurrentPage + 1;
+        if (page > data.TotalPages) page = data.TotalPages;
+        await ChangePage(page);
+    }
+
+    private async Task ChangePage(int number){
+        isPaging = true;
+        if (number > data.TotalPages) number = data.TotalPages;
+        filter.CurrentPage = number;
+        await GetData();
+        isPaging = false;
+    }
+}

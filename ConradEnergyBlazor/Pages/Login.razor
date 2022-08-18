@@ -1,0 +1,58 @@
+﻿@page "/login"
+@using Blazored.LocalStorage
+@using ConradEnergy.Core.DTOs
+@using Microsoft.AspNetCore.Components.Authorization
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILocalStorageService LocalStorage
+@inject NavigationManager NavigationManager
+
+<h3>Login</h3>
+
+
+<EditForm Model="user" OnSubmit="HandleLogin">
+    <label for="username">Name</label>
+    <InputText id="username" @bind-Value="user.Username" />
+    <label for="password">Password</label>
+    <InputText id="password" @bind-Value="user.Password" type="password" />
+    <button class="btn btn-primary" type="submit">
+        @if (isLoading) {
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <text>Wait...</text>
+        }
+        else {
+            <text>Login</text>
+        }
+    </button>
+    @if (!string.IsNullOrEmpty(errorText))
+    {
+        <br />
+        <div class="alert alert-danger" role="alert">
+            @errorText
+        </div>
+    }
+</EditForm>
+
+@code {
+    UserDto user = new UserDto();
+    string errorText = "";
+    bool isLoading = false;
+    async Task HandleLogin()
+    {
+        isLoading = true;
+        var result = await Http.PostAsJsonAsync("auth/login", user);
+        var token = await result.Content.ReadFromJsonAsync<TokenModel>();
+        await LocalStorage.SetItemAsync("token", token);
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var identity = authState.User.Identity;
+        if (identity is null || identity?.IsAuthenticated == false)
+        {
+            errorText = "There was an issue logging you in!";
+        }
+        else
+        {
+            NavigationManager.NavigateTo("");
+        }
+        isLoading = false;
+    }
+}
